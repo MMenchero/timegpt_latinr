@@ -8,6 +8,7 @@ library(nixtlar)
 library(data.table)
 library(tidyverse)
 library(lubridate)
+library(tictoc)
 
 # 1. Load data ----
 df <- fread("data/demo_data.csv")
@@ -46,13 +47,19 @@ usethis::edit_r_environ() # Set your API key as NIXTLA_API_KEY='Your API key her
 nixtla_validate_api_key()
 
 # 3. Start forecasting! ----
+tic()
 fc <- nixtla_client_forecast(train_df, h=14)
+toc()
+
+write.table(fc, "output/timegpt.csv" , sep = ",", row.names = FALSE, quote = FALSE)
 
 ## Plot results ----
 nixtla_client_plot(train_df, fc, max_insample_length = 200)
 
 ## Use the long horizon model ---- 
-fc <- nixtla_client_forecast(train_df, h=14, model = "timegpt-1-long-horizon")
+fc_long <- nixtla_client_forecast(train_df, h=14, model = "timegpt-1-long-horizon")
+
+write.table(fc_long, "output/timegpt_longh.csv" , sep = ",", row.names = FALSE, quote = FALSE)
 
 nixtla_client_plot(train_df, fc, max_insample_length = 200)
 
