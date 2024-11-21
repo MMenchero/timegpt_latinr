@@ -1,8 +1,8 @@
 
 # Compute accuracy of forecasts ---- 
 
+library(tidyverse)
 library(data.table)
-library(fabletools)
 
 # 1. Load data ---- 
 df <- fread("data/demo_data.csv")
@@ -25,10 +25,10 @@ prophet <- fread("output/prophet_fable.csv")
 compute_mae <- function(test, fc, model){
   res <- merge(test, fc, by = c("unique_id", "ds"))
   res <- res |> 
-    mutate(resid = y-.data[[model]])
+    mutate(resid = abs(y-.data[[model]])) |> 
+    summarise(mae = mean(resid, na.rm = TRUE)) 
   
-  mae <- MAE(res$resid)
-  return(round(mae,2))
+  return(paste0("MAE for ", model, ": ", round(mean(res$mae, na.rm = TRUE),2)))
 }
 
 compute_mae(test_df, snaive, "SeasonalNaive")
@@ -39,12 +39,28 @@ compute_mae(test_df, timegpt, "TimeGPT")
 compute_mae(test_df, timegpt_longh, "TimeGPT")
 
 # 4. MASE ---- 
-compute_mase <- function(train, test, fc, model, season_length){
-  res <- merge(test, fc, by = c("unique_id", "ds"))
-  res <- res |> 
-    mutate(resid = y-.data[[model]])
+compute_mase <- function(train, test, fc, model){
+  mae_train <- train |> 
+    mutate(snaive = lag(y, n = 1)) |> 
+    na.omit() |> 
+    mutate(resid = abs(y-snaive)) |> 
+    group_by(unique_id) |> 
+    summarise(mae_train = mean(resid, na.rm = TRUE))
   
-  mase <- MASE(res$resid, train$y, .period = season_length) # for daily data, season_length = 7
-  return(round(mase,2))
+  mae_fc <- merge(test, fc, by = c("unique_id", "ds")) |>
+    mutate(resid = abs(y-.data[[model]])) |> 
+    group_by(unique_id) |>
+    summarise(mae_fc = mean(resid, na.rm = TRUE))
+  
+  mase <- merge(mae_train, mae_fc, by = "unique_id") |> 
+    mutate(mase = mae_fc/mae_train)
+
+  return(paste0("MASE for ", model, ": ", round(mean(mase$mase, na.rm = TRUE),3)))  
 }
 
+compute_mase(train_df, test_df, snaive, "SeasonalNaive")
+compute_mase(train_df, test_df, arima, "AutoARIMA")
+compute_mase(train_df, test_df, ets, "AutoETS")
+compute_mase(train_df, test_df, prophet, "Prophet")
+compute_mase(train_df, test_df, timegpt, "TimeGPT")
+compute_mase(train_df, test_df, timegpt_longh, "TimeGPT")
